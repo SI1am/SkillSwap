@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -11,15 +12,20 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { BookOpen, Eye, EyeOff } from "lucide-react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
-import { useRouter } from "next/navigation"
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+  })
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const router = useRouter()
+
+  const handleInputChange = (field: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -28,18 +34,38 @@ export default function LoginPage() {
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+        email: formData.email,
+        password: formData.password,
       })
 
       if (error) {
         setError(error.message)
-      } else {
+        setLoading(false)
+        return
+      }
+
+      if (data.user) {
+        // Check if user profile exists
+        const { data: profile, error: profileError } = await supabase
+          .from("users")
+          .select("*")
+          .eq("id", data.user.id)
+          .single()
+
+        if (profileError || !profile) {
+          setError("User profile not found. Please contact support.")
+          await supabase.auth.signOut()
+          setLoading(false)
+          return
+        }
+
+        // Success - redirect to dashboard
         router.push("/dashboard")
+        router.refresh()
       }
     } catch (err) {
-      setError("An unexpected error occurred")
-    } finally {
+      console.error("Login error:", err)
+      setError("An unexpected error occurred. Please try again.")
       setLoading(false)
     }
   }
@@ -57,7 +83,7 @@ export default function LoginPage() {
               SkillSwap Campus
             </span>
           </div>
-          <p className="text-gray-600">Welcome back to your learning journey</p>
+          <p className="text-gray-600">Welcome back to the learning community</p>
         </div>
 
         <Card className="border-0 shadow-xl">
@@ -79,8 +105,8 @@ export default function LoginPage() {
                   id="email"
                   type="email"
                   placeholder="your.email@college.edu"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  value={formData.email}
+                  onChange={(e) => handleInputChange("email", e.target.value)}
                   required
                 />
               </div>
@@ -92,8 +118,8 @@ export default function LoginPage() {
                     id="password"
                     type={showPassword ? "text" : "password"}
                     placeholder="Enter your password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    value={formData.password}
+                    onChange={(e) => handleInputChange("password", e.target.value)}
                     required
                   />
                   <Button
@@ -112,12 +138,6 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between">
-                <Link href="#" className="text-sm text-blue-600 hover:underline">
-                  Forgot password?
-                </Link>
-              </div>
-
               <Button
                 type="submit"
                 className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
@@ -129,7 +149,7 @@ export default function LoginPage() {
 
             <div className="mt-6 text-center">
               <p className="text-sm text-gray-600">
-                {"Don't have an account? "}
+                Don't have an account?{" "}
                 <Link href="/auth/signup" className="text-blue-600 hover:underline font-medium">
                   Sign up here
                 </Link>

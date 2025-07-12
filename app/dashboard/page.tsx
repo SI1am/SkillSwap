@@ -1,87 +1,146 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState, useEffect } from "react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { BookOpen, Calendar, Coins, TrendingUp, Star, Award, Target, Plus } from "lucide-react"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { BookOpen, Users, Calendar, TrendingUp, Star, Clock, Coins, Plus, ArrowRight } from "lucide-react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
-import type { User, UserSkill, Meetup, CreditTransaction } from "@/lib/types"
+
+interface DashboardStats {
+  totalCredits: number
+  skillsOffered: number
+  skillsWanted: number
+  upcomingMeetups: number
+  completedSessions: number
+  rating: number
+}
+
+interface RecentActivity {
+  id: string
+  type: "meetup" | "skill_added" | "credits_earned"
+  description: string
+  timestamp: string
+  amount?: number
+}
+
+interface UpcomingMeetup {
+  id: string
+  title: string
+  date: string
+  time: string
+  participant: string
+  type: "teaching" | "learning"
+  credits: number
+}
 
 export default function DashboardPage() {
-  const [user, setUser] = useState<User | null>(null)
-  const [offeredSkills, setOfferedSkills] = useState<UserSkill[]>([])
-  const [wantedSkills, setWantedSkills] = useState<UserSkill[]>([])
-  const [upcomingMeetups, setUpcomingMeetups] = useState<Meetup[]>([])
-  const [recentTransactions, setRecentTransactions] = useState<CreditTransaction[]>([])
+  const [stats, setStats] = useState<DashboardStats>({
+    totalCredits: 0,
+    skillsOffered: 0,
+    skillsWanted: 0,
+    upcomingMeetups: 0,
+    completedSessions: 0,
+    rating: 0,
+  })
+  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([])
+  const [upcomingMeetups, setUpcomingMeetups] = useState<UpcomingMeetup[]>([])
   const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState<any>(null)
 
   useEffect(() => {
-    fetchDashboardData()
+    loadDashboardData()
   }, [])
 
-  const fetchDashboardData = async () => {
+  const loadDashboardData = async () => {
     try {
+      // Get current user
       const {
         data: { user: authUser },
       } = await supabase.auth.getUser()
+
       if (!authUser) return
 
-      // Fetch user profile
+      // Get user profile
       const { data: userData } = await supabase.from("users").select("*").eq("id", authUser.id).single()
 
       if (userData) {
         setUser(userData)
+        setStats((prev) => ({
+          ...prev,
+          totalCredits: userData.credits || 0,
+        }))
       }
 
-      // Fetch user skills
-      const { data: skillsData } = await supabase
-        .from("user_skills")
-        .select(`
-          *,
-          skill:skills(*)
-        `)
-        .eq("user_id", authUser.id)
+      // Get user skills count
+      const { data: userSkills } = await supabase.from("user_skills").select("type").eq("user_id", authUser.id)
 
-      if (skillsData) {
-        setOfferedSkills(skillsData.filter((s) => s.type === "offered"))
-        setWantedSkills(skillsData.filter((s) => s.type === "wanted"))
+      if (userSkills) {
+        const offered = userSkills.filter((skill) => skill.type === "offered").length
+        const wanted = userSkills.filter((skill) => skill.type === "wanted").length
+        setStats((prev) => ({
+          ...prev,
+          skillsOffered: offered,
+          skillsWanted: wanted,
+        }))
       }
 
-      // Fetch upcoming meetups
-      const { data: meetupsData } = await supabase
-        .from("meetups")
-        .select(`
-          *,
-          teacher:users!teacher_id(*),
-          learner:users!learner_id(*),
-          skill:skills(*)
-        `)
-        .or(`teacher_id.eq.${authUser.id},learner_id.eq.${authUser.id}`)
-        .eq("status", "scheduled")
-        .gte("scheduled_date", new Date().toISOString().split("T")[0])
-        .order("scheduled_date", { ascending: true })
-        .limit(5)
+      // Mock data for other stats (you can implement these with real data later)
+      setStats((prev) => ({
+        ...prev,
+        upcomingMeetups: 2,
+        completedSessions: 8,
+        rating: 4.8,
+      }))
 
-      if (meetupsData) {
-        setUpcomingMeetups(meetupsData)
-      }
+      // Mock recent activity
+      setRecentActivity([
+        {
+          id: "1",
+          type: "credits_earned",
+          description: "Earned credits from teaching JavaScript",
+          timestamp: "2 hours ago",
+          amount: 25,
+        },
+        {
+          id: "2",
+          type: "meetup",
+          description: "Scheduled meetup for Python tutoring",
+          timestamp: "1 day ago",
+        },
+        {
+          id: "3",
+          type: "skill_added",
+          description: "Added React to your skill list",
+          timestamp: "3 days ago",
+        },
+      ])
 
-      // Fetch recent transactions
-      const { data: transactionsData } = await supabase
-        .from("credit_transactions")
-        .select("*")
-        .eq("user_id", authUser.id)
-        .order("created_at", { ascending: false })
-        .limit(5)
-
-      if (transactionsData) {
-        setRecentTransactions(transactionsData)
-      }
+      // Mock upcoming meetups
+      setUpcomingMeetups([
+        {
+          id: "1",
+          title: "JavaScript Fundamentals",
+          date: "Tomorrow",
+          time: "2:00 PM",
+          participant: "Sarah Chen",
+          type: "teaching",
+          credits: 25,
+        },
+        {
+          id: "2",
+          title: "Advanced Python",
+          date: "Friday",
+          time: "4:00 PM",
+          participant: "Mike Johnson",
+          type: "learning",
+          credits: 30,
+        },
+      ])
     } catch (error) {
-      console.error("Error fetching dashboard data:", error)
+      console.error("Error loading dashboard data:", error)
     } finally {
       setLoading(false)
     }
@@ -89,307 +148,205 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading your dashboard...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-gray-600 mb-4">Please log in to view your dashboard</p>
-          <Link href="/auth/login">
-            <Button>Go to Login</Button>
-          </Link>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                  <BookOpen className="w-5 h-5 text-white" />
-                </div>
-                <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  SkillSwap Campus
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Link href="/skills">
-                <Button variant="ghost">Browse Skills</Button>
-              </Link>
-              <Link href="/credits">
-                <Button variant="ghost" className="flex items-center space-x-2">
-                  <Coins className="w-4 h-4" />
-                  <span>{user.credits} Credits</span>
-                </Button>
-              </Link>
-              <Avatar>
-                <AvatarImage src={user.avatar_url || "/placeholder.svg"} />
-                <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-              </Avatar>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <div className="container mx-auto px-4 py-8">
-        {/* Welcome Section */}
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome back, {user.name}!</h1>
-          <p className="text-gray-600">Here's what's happening with your skill exchange journey</p>
+          <h1 className="text-3xl font-bold text-gray-900">Welcome back, {user?.name || "Student"}! 👋</h1>
+          <p className="text-gray-600 mt-2">Here's what's happening with your skill exchange journey</p>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid md:grid-cols-4 gap-6 mb-8">
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Credits Balance</CardTitle>
-              <Coins className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">{user.credits}</div>
-              <p className="text-xs text-muted-foreground">Available for learning</p>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Total Credits</p>
+                  <p className="text-3xl font-bold text-green-600">{stats.totalCredits}</p>
+                </div>
+                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                  <Coins className="w-6 h-6 text-green-600" />
+                </div>
+              </div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Skills Offered</CardTitle>
-              <Star className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-600">{offeredSkills.length}</div>
-              <p className="text-xs text-muted-foreground">Ready to teach</p>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Skills Offered</p>
+                  <p className="text-3xl font-bold text-blue-600">{stats.skillsOffered}</p>
+                </div>
+                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <BookOpen className="w-6 h-6 text-blue-600" />
+                </div>
+              </div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Learning Goals</CardTitle>
-              <Target className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-purple-600">{wantedSkills.length}</div>
-              <p className="text-xs text-muted-foreground">Skills to learn</p>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Learning Goals</p>
+                  <p className="text-3xl font-bold text-purple-600">{stats.skillsWanted}</p>
+                </div>
+                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                  <TrendingUp className="w-6 h-6 text-purple-600" />
+                </div>
+              </div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Upcoming Sessions</CardTitle>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-600">{upcomingMeetups.length}</div>
-              <p className="text-xs text-muted-foreground">This week</p>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Rating</p>
+                  <div className="flex items-center space-x-1">
+                    <p className="text-3xl font-bold text-yellow-600">{stats.rating}</p>
+                    <Star className="w-5 h-5 text-yellow-400 fill-current" />
+                  </div>
+                </div>
+                <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
+                  <Users className="w-6 h-6 text-yellow-600" />
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-8">
-          {/* Left Column */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Upcoming Meetups */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Upcoming Meetups */}
+          <div className="lg:col-span-2">
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center space-x-2">
-                    <Calendar className="w-5 h-5" />
-                    <span>Upcoming Sessions</span>
-                  </CardTitle>
-                  <Link href="/meetups">
-                    <Button variant="outline" size="sm">
-                      View All
-                    </Button>
-                  </Link>
+                  <div>
+                    <CardTitle className="flex items-center space-x-2">
+                      <Calendar className="w-5 h-5" />
+                      <span>Upcoming Meetups</span>
+                    </CardTitle>
+                    <CardDescription>Your scheduled learning sessions</CardDescription>
+                  </div>
+                  <Button asChild size="sm">
+                    <Link href="/meetups/schedule">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Schedule New
+                    </Link>
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent>
-                {upcomingMeetups.length > 0 ? (
-                  <div className="space-y-4">
-                    {upcomingMeetups.map((meetup) => (
-                      <div key={meetup.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                            <BookOpen className="w-6 h-6 text-blue-600" />
-                          </div>
-                          <div>
-                            <h4 className="font-medium">{meetup.title}</h4>
-                            <p className="text-sm text-gray-600">
-                              {meetup.skill?.name} • {meetup.mode}
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              {new Date(meetup.scheduled_date).toLocaleDateString()} at {meetup.scheduled_time}
-                            </p>
-                          </div>
+                <div className="space-y-4">
+                  {upcomingMeetups.map((meetup) => (
+                    <div key={meetup.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex items-center space-x-4">
+                        <Avatar>
+                          <AvatarFallback className="bg-gradient-to-br from-blue-600 to-purple-600 text-white">
+                            {meetup.participant.charAt(0)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <h4 className="font-semibold">{meetup.title}</h4>
+                          <p className="text-sm text-gray-600">
+                            {meetup.date} at {meetup.time} • {meetup.participant}
+                          </p>
                         </div>
-                        <Badge variant="outline">{meetup.credits_cost} credits</Badge>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600 mb-4">No upcoming sessions</p>
-                    <Link href="/skills">
-                      <Button>Browse Skills to Learn</Button>
-                    </Link>
-                  </div>
-                )}
+                      <div className="flex items-center space-x-3">
+                        <Badge variant={meetup.type === "teaching" ? "default" : "secondary"}>
+                          {meetup.type === "teaching" ? "Teaching" : "Learning"}
+                        </Badge>
+                        <div className="text-right">
+                          <p className="text-sm font-medium text-green-600">
+                            {meetup.type === "teaching" ? "+" : "-"}
+                            {meetup.credits} credits
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {upcomingMeetups.length === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                      <Calendar className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                      <p>No upcoming meetups scheduled</p>
+                      <Button asChild className="mt-4 bg-transparent" variant="outline">
+                        <Link href="/skills">Browse Skills to Learn</Link>
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
+          </div>
 
-            {/* Recent Activity */}
+          {/* Recent Activity */}
+          <div>
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
-                  <TrendingUp className="w-5 h-5" />
-                  <span>Recent Credit Activity</span>
+                  <Clock className="w-5 h-5" />
+                  <span>Recent Activity</span>
                 </CardTitle>
+                <CardDescription>Your latest actions</CardDescription>
               </CardHeader>
               <CardContent>
-                {recentTransactions.length > 0 ? (
-                  <div className="space-y-3">
-                    {recentTransactions.map((transaction) => (
-                      <div key={transaction.id} className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div
-                            className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                              transaction.type === "earned" ? "bg-green-100" : "bg-red-100"
-                            }`}
-                          >
-                            <Coins
-                              className={`w-4 h-4 ${transaction.type === "earned" ? "text-green-600" : "text-red-600"}`}
-                            />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium">{transaction.description}</p>
-                            <p className="text-xs text-gray-500">
-                              {new Date(transaction.created_at).toLocaleDateString()}
-                            </p>
-                          </div>
-                        </div>
-                        <span
-                          className={`font-medium ${transaction.type === "earned" ? "text-green-600" : "text-red-600"}`}
-                        >
-                          {transaction.type === "earned" ? "+" : "-"}
-                          {transaction.amount}
-                        </span>
+                <div className="space-y-4">
+                  {recentActivity.map((activity) => (
+                    <div key={activity.id} className="flex items-start space-x-3">
+                      <div className="w-2 h-2 bg-blue-600 rounded-full mt-2"></div>
+                      <div className="flex-1">
+                        <p className="text-sm">{activity.description}</p>
+                        <p className="text-xs text-gray-500">{activity.timestamp}</p>
+                        {activity.amount && (
+                          <Badge variant="secondary" className="mt-1 text-xs">
+                            +{activity.amount} credits
+                          </Badge>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <Coins className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600">No recent transactions</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Right Column */}
-          <div className="space-y-6">
-            {/* Skills I Offer */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">Skills I Teach</CardTitle>
-                  <Link href="/skills/manage">
-                    <Button variant="outline" size="sm">
-                      <Plus className="w-4 h-4 mr-1" />
-                      Add
-                    </Button>
-                  </Link>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {offeredSkills.slice(0, 5).map((userSkill) => (
-                    <div key={userSkill.id} className="flex items-center justify-between">
-                      <span className="text-sm">{userSkill.skill?.name}</span>
-                      <Badge variant="secondary" className="bg-green-100 text-green-800">
-                        Level {userSkill.proficiency_level}
-                      </Badge>
                     </div>
                   ))}
-                  {offeredSkills.length === 0 && (
-                    <p className="text-sm text-gray-500 text-center py-4">No skills added yet</p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Skills I Want to Learn */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">Want to Learn</CardTitle>
-                  <Link href="/skills/manage">
-                    <Button variant="outline" size="sm">
-                      <Plus className="w-4 h-4 mr-1" />
-                      Add
-                    </Button>
-                  </Link>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {wantedSkills.slice(0, 5).map((userSkill) => (
-                    <div key={userSkill.id} className="flex items-center justify-between">
-                      <span className="text-sm">{userSkill.skill?.name}</span>
-                      <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                        Interested
-                      </Badge>
-                    </div>
-                  ))}
-                  {wantedSkills.length === 0 && (
-                    <p className="text-sm text-gray-500 text-center py-4">No learning goals set</p>
-                  )}
                 </div>
               </CardContent>
             </Card>
 
             {/* Quick Actions */}
-            <Card>
+            <Card className="mt-6">
               <CardHeader>
-                <CardTitle className="text-lg">Quick Actions</CardTitle>
+                <CardTitle>Quick Actions</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <Link href="/skills" className="block">
-                    <Button variant="outline" className="w-full justify-start bg-transparent">
-                      <BookOpen className="w-4 h-4 mr-2" />
-                      Browse Skills
-                    </Button>
+              <CardContent className="space-y-3">
+                <Button asChild className="w-full justify-start bg-transparent" variant="outline">
+                  <Link href="/skills">
+                    <BookOpen className="w-4 h-4 mr-2" />
+                    Browse Skills
+                    <ArrowRight className="w-4 h-4 ml-auto" />
                   </Link>
-                  <Link href="/meetups/schedule" className="block">
-                    <Button variant="outline" className="w-full justify-start bg-transparent">
-                      <Calendar className="w-4 h-4 mr-2" />
-                      Schedule Session
-                    </Button>
+                </Button>
+                <Button asChild className="w-full justify-start bg-transparent" variant="outline">
+                  <Link href="/credits/earn">
+                    <Coins className="w-4 h-4 mr-2" />
+                    Earn Credits
+                    <ArrowRight className="w-4 h-4 ml-auto" />
                   </Link>
-                  <Link href="/credits/earn" className="block">
-                    <Button variant="outline" className="w-full justify-start bg-transparent">
-                      <Award className="w-4 h-4 mr-2" />
-                      Earn Credits
-                    </Button>
+                </Button>
+                <Button asChild className="w-full justify-start bg-transparent" variant="outline">
+                  <Link href="/meetups/schedule">
+                    <Calendar className="w-4 h-4 mr-2" />
+                    Schedule Meetup
+                    <ArrowRight className="w-4 h-4 ml-auto" />
                   </Link>
-                </div>
+                </Button>
               </CardContent>
             </Card>
           </div>

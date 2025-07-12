@@ -1,23 +1,21 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState, useEffect } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
-import { Coins, TrendingUp, TrendingDown, Calendar, Award, BookOpen, CheckCircle, Gift } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Coins, TrendingUp, TrendingDown, Calendar, Award, BookOpen } from "lucide-react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
+import { AuthGuard } from "@/components/auth-guard"
+import { Navbar } from "@/components/navbar"
 import type { User, CreditTransaction } from "@/lib/types"
 
-export default function CreditsPage() {
+function CreditsContent() {
   const [user, setUser] = useState<User | null>(null)
   const [transactions, setTransactions] = useState<CreditTransaction[]>([])
   const [loading, setLoading] = useState(true)
-  const [stats, setStats] = useState({
-    totalEarned: 0,
-    totalSpent: 0,
-    thisMonth: 0,
-  })
 
   useEffect(() => {
     fetchCreditsData()
@@ -37,7 +35,7 @@ export default function CreditsPage() {
         setUser(userData)
       }
 
-      // Fetch credit transactions
+      // Fetch transactions
       const { data: transactionsData } = await supabase
         .from("credit_transactions")
         .select("*")
@@ -46,21 +44,6 @@ export default function CreditsPage() {
 
       if (transactionsData) {
         setTransactions(transactionsData)
-
-        // Calculate stats
-        const totalEarned = transactionsData.filter((t) => t.type === "earned").reduce((sum, t) => sum + t.amount, 0)
-
-        const totalSpent = transactionsData.filter((t) => t.type === "spent").reduce((sum, t) => sum + t.amount, 0)
-
-        const thisMonth = transactionsData
-          .filter((t) => {
-            const transactionDate = new Date(t.created_at)
-            const now = new Date()
-            return transactionDate.getMonth() === now.getMonth() && transactionDate.getFullYear() === now.getFullYear()
-          })
-          .reduce((sum, t) => sum + (t.type === "earned" ? t.amount : -t.amount), 0)
-
-        setStats({ totalEarned, totalSpent, thisMonth })
       }
     } catch (error) {
       console.error("Error fetching credits data:", error)
@@ -69,25 +52,25 @@ export default function CreditsPage() {
     }
   }
 
+  const earnedTransactions = transactions.filter((t) => t.type === "earned")
+  const spentTransactions = transactions.filter((t) => t.type === "spent")
+
+  const totalEarned = earnedTransactions.reduce((sum, t) => sum + t.amount, 0)
+  const totalSpent = spentTransactions.reduce((sum, t) => sum + t.amount, 0)
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading credits...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-gray-600 mb-4">Please log in to view your credits</p>
-          <Link href="/auth/login">
-            <Button>Go to Login</Button>
-          </Link>
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <div className="container mx-auto px-4 py-8">
+          <div className="animate-pulse space-y-6">
+            <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+            <div className="grid md:grid-cols-3 gap-6">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="h-32 bg-gray-200 rounded"></div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     )
@@ -95,61 +78,50 @@ export default function CreditsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <Link href="/dashboard" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                <BookOpen className="w-5 h-5 text-white" />
-              </div>
-              <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                SkillSwap Campus
-              </span>
-            </Link>
-            <Link href="/dashboard">
-              <Button variant="outline">Back to Dashboard</Button>
-            </Link>
-          </div>
-        </div>
-      </header>
+      <Navbar />
 
       <div className="container mx-auto px-4 py-8">
-        {/* Page Header */}
+        {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Credit Wallet</h1>
-          <p className="text-gray-600">Manage your credits and track your earning history</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Credits Wallet</h1>
+          <p className="text-gray-600">Manage your campus credits and view transaction history</p>
         </div>
 
-        {/* Credit Balance Card */}
-        <Card className="mb-8 bg-gradient-to-r from-green-500 to-blue-600 text-white">
-          <CardContent className="p-8">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-green-100 mb-2">Current Balance</p>
-                <h2 className="text-4xl font-bold mb-4">{user.credits} Credits</h2>
-                <div className="flex items-center space-x-4 text-sm">
-                  <div className="flex items-center space-x-1">
-                    <TrendingUp className="w-4 h-4" />
-                    <span>Earned: {stats.totalEarned}</span>
-                  </div>
-                  <div className="flex items-center space-x-1">
-                    <TrendingDown className="w-4 h-4" />
-                    <span>Spent: {stats.totalSpent}</span>
-                  </div>
-                </div>
-              </div>
-              <div className="text-right">
-                <Coins className="w-16 h-16 text-green-100 mb-4" />
-                <Link href="/credits/earn">
-                  <Button variant="secondary" className="bg-white text-green-600 hover:bg-gray-100">
-                    Earn More Credits
-                  </Button>
-                </Link>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Stats Cards */}
+        <div className="grid md:grid-cols-3 gap-6 mb-8">
+          <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-green-800">Current Balance</CardTitle>
+              <Coins className="h-5 w-5 text-green-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-green-700">{user?.credits || 0}</div>
+              <p className="text-xs text-green-600 mt-1">Available credits</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-blue-800">Total Earned</CardTitle>
+              <TrendingUp className="h-5 w-5 text-blue-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-blue-700">{totalEarned}</div>
+              <p className="text-xs text-blue-600 mt-1">Lifetime earnings</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-purple-800">Total Spent</CardTitle>
+              <TrendingDown className="h-5 w-5 text-purple-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-purple-700">{totalSpent}</div>
+              <p className="text-xs text-purple-600 mt-1">On learning</p>
+            </CardContent>
+          </Card>
+        </div>
 
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Transaction History */}
@@ -160,135 +132,169 @@ export default function CreditsPage() {
                   <Calendar className="w-5 h-5" />
                   <span>Transaction History</span>
                 </CardTitle>
-                <CardDescription>Your recent credit earnings and spending</CardDescription>
               </CardHeader>
               <CardContent>
-                {transactions.length > 0 ? (
-                  <div className="space-y-4">
-                    {transactions.map((transaction) => (
-                      <div key={transaction.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="flex items-center space-x-4">
-                          <div
-                            className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                              transaction.type === "earned" ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600"
-                            }`}
-                          >
-                            {transaction.type === "earned" ? (
-                              <TrendingUp className="w-5 h-5" />
-                            ) : (
-                              <TrendingDown className="w-5 h-5" />
-                            )}
+                <Tabs defaultValue="all" className="w-full">
+                  <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="all">All</TabsTrigger>
+                    <TabsTrigger value="earned">Earned</TabsTrigger>
+                    <TabsTrigger value="spent">Spent</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="all" className="space-y-4 mt-4">
+                    {transactions.length > 0 ? (
+                      transactions.map((transaction) => (
+                        <div key={transaction.id} className="flex items-center justify-between p-4 border rounded-lg">
+                          <div className="flex items-center space-x-3">
+                            <div
+                              className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                                transaction.type === "earned" ? "bg-green-100" : "bg-red-100"
+                              }`}
+                            >
+                              <Coins
+                                className={`w-5 h-5 ${
+                                  transaction.type === "earned" ? "text-green-600" : "text-red-600"
+                                }`}
+                              />
+                            </div>
+                            <div>
+                              <p className="font-medium">{transaction.description}</p>
+                              <p className="text-sm text-gray-500">
+                                {new Date(transaction.created_at).toLocaleDateString()} at{" "}
+                                {new Date(transaction.created_at).toLocaleTimeString()}
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <h4 className="font-medium">{transaction.description}</h4>
-                            <p className="text-sm text-gray-500">
-                              {new Date(transaction.created_at).toLocaleDateString()} at{" "}
-                              {new Date(transaction.created_at).toLocaleTimeString()}
-                            </p>
+                          <div className="text-right">
+                            <span
+                              className={`text-lg font-bold ${
+                                transaction.type === "earned" ? "text-green-600" : "text-red-600"
+                              }`}
+                            >
+                              {transaction.type === "earned" ? "+" : "-"}
+                              {transaction.amount}
+                            </span>
+                            <Badge variant={transaction.type === "earned" ? "default" : "secondary"} className="ml-2">
+                              {transaction.type}
+                            </Badge>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <span
-                            className={`text-lg font-semibold ${
-                              transaction.type === "earned" ? "text-green-600" : "text-red-600"
-                            }`}
-                          >
-                            {transaction.type === "earned" ? "+" : "-"}
-                            {transaction.amount}
-                          </span>
-                          <p className="text-sm text-gray-500">credits</p>
-                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-8">
+                        <Coins className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-600">No transactions yet</p>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <Coins className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600 mb-4">No transactions yet</p>
-                    <Link href="/credits/earn">
-                      <Button>Start Earning Credits</Button>
-                    </Link>
-                  </div>
-                )}
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="earned" className="space-y-4 mt-4">
+                    {earnedTransactions.length > 0 ? (
+                      earnedTransactions.map((transaction) => (
+                        <div key={transaction.id} className="flex items-center justify-between p-4 border rounded-lg">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                              <Coins className="w-5 h-5 text-green-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium">{transaction.description}</p>
+                              <p className="text-sm text-gray-500">
+                                {new Date(transaction.created_at).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-lg font-bold text-green-600">+{transaction.amount}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-8">
+                        <TrendingUp className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-600">No earnings yet</p>
+                      </div>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="spent" className="space-y-4 mt-4">
+                    {spentTransactions.length > 0 ? (
+                      spentTransactions.map((transaction) => (
+                        <div key={transaction.id} className="flex items-center justify-between p-4 border rounded-lg">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                              <Coins className="w-5 h-5 text-red-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium">{transaction.description}</p>
+                              <p className="text-sm text-gray-500">
+                                {new Date(transaction.created_at).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-lg font-bold text-red-600">-{transaction.amount}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-8">
+                        <TrendingDown className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-600">No spending yet</p>
+                      </div>
+                    )}
+                  </TabsContent>
+                </Tabs>
               </CardContent>
             </Card>
           </div>
 
-          {/* Sidebar */}
+          {/* Quick Actions */}
           <div className="space-y-6">
-            {/* Monthly Stats */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">This Month</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center">
-                  <div
-                    className={`text-2xl font-bold mb-2 ${stats.thisMonth >= 0 ? "text-green-600" : "text-red-600"}`}
-                  >
-                    {stats.thisMonth >= 0 ? "+" : ""}
-                    {stats.thisMonth}
-                  </div>
-                  <p className="text-sm text-gray-600 mb-4">Net Credits</p>
-                  <Progress value={Math.min((Math.abs(stats.thisMonth) / 100) * 100, 100)} className="h-2" />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Quick Actions */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Quick Actions</CardTitle>
+                <CardTitle className="text-lg">Earn More Credits</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
                   <Link href="/credits/earn" className="block">
                     <Button variant="outline" className="w-full justify-start bg-transparent">
                       <Award className="w-4 h-4 mr-2" />
-                      Earn Credits
+                      Daily Tasks
+                    </Button>
+                  </Link>
+                  <Link href="/skills/manage" className="block">
+                    <Button variant="outline" className="w-full justify-start bg-transparent">
+                      <BookOpen className="w-4 h-4 mr-2" />
+                      Teach Skills
                     </Button>
                   </Link>
                   <Link href="/skills" className="block">
                     <Button variant="outline" className="w-full justify-start bg-transparent">
-                      <BookOpen className="w-4 h-4 mr-2" />
-                      Spend on Learning
-                    </Button>
-                  </Link>
-                  <Link href="/meetups/schedule" className="block">
-                    <Button variant="outline" className="w-full justify-start bg-transparent">
-                      <Calendar className="w-4 h-4 mr-2" />
-                      Book Session
+                      <Coins className="w-4 h-4 mr-2" />
+                      Help Others
                     </Button>
                   </Link>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Credit Tips */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg flex items-center space-x-2">
-                  <Gift className="w-5 h-5" />
-                  <span>Earning Tips</span>
-                </CardTitle>
+                <CardTitle className="text-lg">Credit Tips</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3 text-sm">
+                <div className="space-y-3 text-sm text-gray-600">
                   <div className="flex items-start space-x-2">
-                    <CheckCircle className="w-4 h-4 text-green-600 mt-0.5" />
-                    <span>Complete daily login for 5 credits</span>
+                    <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                    <p>Complete daily login to earn 5 credits</p>
                   </div>
                   <div className="flex items-start space-x-2">
-                    <CheckCircle className="w-4 h-4 text-green-600 mt-0.5" />
-                    <span>Teach skills to earn 20-50 credits per session</span>
+                    <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+                    <p>Teaching sessions earn 15-30 credits per hour</p>
                   </div>
                   <div className="flex items-start space-x-2">
-                    <CheckCircle className="w-4 h-4 text-green-600 mt-0.5" />
-                    <span>Help other students for bonus credits</span>
+                    <div className="w-2 h-2 bg-purple-500 rounded-full mt-2"></div>
+                    <p>Help community members for bonus credits</p>
                   </div>
                   <div className="flex items-start space-x-2">
-                    <CheckCircle className="w-4 h-4 text-green-600 mt-0.5" />
-                    <span>Refer friends to earn 25 credits each</span>
+                    <div className="w-2 h-2 bg-orange-500 rounded-full mt-2"></div>
+                    <p>Learning sessions cost 10-25 credits per hour</p>
                   </div>
                 </div>
               </CardContent>
@@ -297,5 +303,13 @@ export default function CreditsPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function CreditsPage() {
+  return (
+    <AuthGuard>
+      <CreditsContent />
+    </AuthGuard>
   )
 }
